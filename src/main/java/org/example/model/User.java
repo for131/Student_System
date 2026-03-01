@@ -61,4 +61,12 @@ public abstract class User implements Serializable {
     public void setRole(String role) {
         this.role = role;
     }
+
+    @Override
+    public String toString() {
+        return "user{" +
+                "username ='" + username + '\''+
+                ",name = '" +name + '\'' +
+                ",role='" +role+ '\''+'}';
+    }
 }
