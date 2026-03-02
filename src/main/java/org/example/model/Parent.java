@@ -8,7 +8,7 @@ public class Parent extends User {
     }
 
     public Parent(String username, String password, String name, String phone, String address) {
-        super(username, password, name, phone, "PARENT");
+        super(username, password, name, phone, "Parent");
         this.address = address;
     }
 
