@@ -8,7 +8,7 @@ import java.util.List;
 
 public class AnnouncementDao extends BaseDao<Announcement> {
     protected String getFilePath(){
-        return "data/requirements.json";
+        return "data/announcements.json";
     }
     protected TypeToken<List<Announcement>> getTypeToken(){
         return new TypeToken<List<Announcement>>(){};
