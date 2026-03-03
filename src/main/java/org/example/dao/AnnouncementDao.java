@@ -14,3 +14,6 @@ public class AnnouncementDao extends BaseDao<Announcement> {
         return new TypeToken<List<Announcement>>(){};
     }
 }
+/*
+
+ */
