@@ -9,9 +9,9 @@ public class Student extends User {
     // 展示到ui界面
     private String subject;//学科
     private String targetGrages;//可辅导年级
-    private String experience;//家教经验
+    private int experience;//家教经验
     private String price;//收费标准
-    private String way;//辅导方式
+    private String way; //辅导方式
     private String advantage;//个人优势：获奖，特长
     //系统审核
     private int Accept; //0-待审核，1-审核通过 ，2-审核拒绝
@@ -81,11 +81,11 @@ public class Student extends User {
         this.targetGrages = targetGrages;
     }
 
-    public String getExperience() {
+    public int getExperience() {
         return experience;
     }
 
-    public void setExperience(String experience) {
+    public void setExperience(int experience) {
         this.experience = experience;
     }
 
