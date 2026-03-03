@@ -21,4 +21,13 @@ public class UserService {
         return false;
     }
 
+    public boolean register(User user){
+        List<User> users = userdao.findLits(u -> u.getUsername().equals((user.getUsername())));
+        if(!users.isEmpty()){
+            userdao.add(user);
+            return true;
+        }
+        return false;
+    }
+
 }
