@@ -390,7 +390,7 @@ public class LoginView extends JFrame {
                 UITheme.showError(this, "请填写家庭地址！");
                 return;
             }
-            Parent p = new Parent(username, password, name, phone, address);
+            Parent p = new Parent(username, "Parent", password, name, phone);
             newUser = p;
         } else {
             // Admin

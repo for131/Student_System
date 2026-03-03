@@ -14,6 +14,8 @@ public class UserService {
         List<User> users = userdao.findLits(u -> u.getUsername().equals(name));
         if(!users.isEmpty()){
             User user = users.get(0);
+            System.out.println("数据库中的密码: [" + user.getPassword() + "]");
+            System.out.println("输入的密码: [" + password + "]");
             if(user.getPassword().equals(password)){
                 currentUser = user;
                 return true;
@@ -25,10 +27,10 @@ public class UserService {
     public boolean register(User user){
         List<User> users = userdao.findLits(u -> u.getUsername().equals((user.getUsername())));
         if(users.isEmpty()){
-                userdao.add(user);
-                return true;
-        }else{
+            userdao.add(user);
             return true;
+        }else{
+            return false;
         }
     }
 

@@ -7,9 +7,9 @@ public class Parent extends User {
         this.setRole("Parent");
     }
 
-    public Parent(String username, String password, String name, String phone, String address) {
-        super(username, password, name, phone, "Parent");
-        this.address = address;
+    public Parent(String username, String role, String password, String name, String phone) {
+        super(username, role, password, name, phone);
+        this.setRole("Parent");
     }
 
     public String getAddress() {
