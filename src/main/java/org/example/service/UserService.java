@@ -14,7 +14,7 @@ public class UserService {
         List<User> users = userdao.findLits(u -> u.getUsername().equals(name));
         if(!users.isEmpty()){
             User user = users.get(0);
-            if(user.getPassword() == password){
+            if(user.getPassword().equals(password)){
                 currentUser = user;
                 return true;
             }
@@ -25,15 +25,11 @@ public class UserService {
     public boolean register(User user){
         List<User> users = userdao.findLits(u -> u.getUsername().equals((user.getUsername())));
         if(users.isEmpty()){
-            boolean flag = admin.check_name(user.getName());
-            if(flag){
                 userdao.add(user);
                 return true;
-            }else{
-                return false;
-            }
+        }else{
+            return true;
         }
-        return false;
     }
 
     public static User getCurrentUser() {

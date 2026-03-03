@@ -16,23 +16,33 @@ public class AdminService {
     public void publish(Announcement ann) {
         announcementDao.add(ann);
     }
-    public boolean check_name(String name){
-        List<User> list = userDao.findLits(u -> u.getRole().equals("Name"));
-        if(!list.isEmpty()){
-            User s1 = list.get(0);
-            if(s1.getRole().equals("Student")){
-                Student student = (Student) s1;
-                if(student.getExperience() >= 3){
-                    student.setAccept(1);
-                    userDao.update(u -> u.getName().equals(student.getName()),student);
-                    return true;
-                }else{
-                    return false;
-                }
-            }else{
-                return true;
-            }
+    public boolean approveStudent(String username) {
+        List<User> list = userDao.findLits(u -> u.getUsername().equals(username));
+        if (!list.isEmpty() && list.get(0) instanceof Student student) {
+            student.setAccept(1);   // 1 = 审核通过
+            student.setVisible(true);
+            userDao.update(u -> u.getUsername().equals(username), student);
+            return true;
         }
         return false;
+    }
+    public boolean rejectStudent(String username) {
+        List<User> list = userDao.findLits(u -> u.getUsername().equals(username));
+        if (!list.isEmpty() && list.get(0) instanceof Student student) {
+            student.setAccept(2);   // 2 = 审核拒绝
+            student.setVisible(false);
+            userDao.update(u -> u.getUsername().equals(username), student);
+            return true;
+        }
+        return false;
+    }
+    public List<User> getPendingStudents() {
+        return userDao.findLits(u -> {
+            if (u instanceof Student s) return s.getAccept() == 0;
+            return false;
+        });
+    }
+    public List<User> getAllStudents() {
+        return userDao.findLits(u -> u.getRole().equals("Student"));
     }
 }

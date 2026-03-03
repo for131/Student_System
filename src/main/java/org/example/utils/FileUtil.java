@@ -1,50 +1,82 @@
 package org.example.utils;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import org.example.model.*;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 public class FileUtil {
-    // 创建 Gson 对象，setPrettyPrinting 让生成的 JSON 文件带缩进，方便肉眼阅读
-    private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     /**
-     * 将 List 集合保存为 JSON 文件
-     * @param filePath 文件路径，如 "data/users.json"
-     * @param list 要保存的数据集合
+     * 自定义 User TypeAdapter：
+     * 写出时序列化具体子类，读取时根据 role 字段决定实例化哪个子类。
      */
+    private static class UserTypeAdapter extends TypeAdapter<User> {
+        private final Gson delegateGson = new GsonBuilder().setPrettyPrinting().create();
+
+        @Override
+        public void write(JsonWriter out, User user) throws IOException {
+            if (user == null) { out.nullValue(); return; }
+            JsonObject obj = delegateGson.toJsonTree(user).getAsJsonObject();
+            if (!obj.has("role") && user.getRole() != null) {
+                obj.addProperty("role", user.getRole());
+            }
+            new Gson().toJson(obj, out);
+        }
+
+        @Override
+        public User read(JsonReader in) throws IOException {
+            JsonObject obj = JsonParser.parseReader(in).getAsJsonObject();
+            String role = obj.has("role") ? obj.get("role").getAsString() : "";
+            return switch (role) {
+                case "Student" -> delegateGson.fromJson(obj, Student.class);
+                case "Parent"  -> delegateGson.fromJson(obj, Parent.class);
+                case "Admin"   -> delegateGson.fromJson(obj, Admin.class);
+                default -> {
+                    System.err.println("未知角色: " + role);
+                    yield delegateGson.fromJson(obj, Admin.class);
+                }
+            };
+        }
+    }
+
+    private static final Gson gson = new GsonBuilder()
+            .setPrettyPrinting()
+            .registerTypeAdapter(User.class, new UserTypeAdapter())
+            .create();
+
     public static <T> void saveToJson(String filePath, List<T> list) {
-        // 使用 try-with-resources 自动关闭流，指定 UTF-8 防止中文乱码
-        try (Writer writer = new OutputStreamWriter(
-                new FileOutputStream(filePath), StandardCharsets.UTF_8)) {
+        File file = new File(filePath);
+        File parentDir = file.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            if (!parentDir.mkdirs()) {
+                System.err.println("无法创建目录: " + parentDir.getAbsolutePath());
+                return;
+            }
+        }
+        try (Writer writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
             gson.toJson(list, writer);
         } catch (IOException e) {
             System.err.println("写入文件失败: " + e.getMessage());
         }
     }
 
-    /**
-     * 从 JSON 文件读取数据并转回 List 集合
-     * @param filePath 文件路径
-     * @param typeToken 泛型令牌，调用方式：new TypeToken<List<Student>>(){}
-     */
     public static <T> List<T> readFromJson(String filePath, TypeToken<List<T>> typeToken) {
         File file = new File(filePath);
-        if (!file.exists()) {
-            return new ArrayList<>(); // 如果文件还没生成，返回空列表，防止程序崩溃
-        }
-
-        try (Reader reader = new InputStreamReader(
-                new FileInputStream(file), StandardCharsets.UTF_8)) {
-            List<T> list = gson.fromJson(reader, typeToken.getType());
-            return list != null ? list : new ArrayList<>();
+        if (!file.exists()) return new ArrayList<>();
+        try (Reader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+            List<T> result = gson.fromJson(reader, typeToken.getType());
+            return result != null ? result : new ArrayList<>();
         } catch (IOException e) {
             System.err.println("读取文件失败: " + e.getMessage());
             return new ArrayList<>();
         }
     }
+
 }

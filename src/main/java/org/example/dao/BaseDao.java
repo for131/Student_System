@@ -47,6 +47,10 @@ public abstract class BaseDao<T> {
             saveAll(list);
         }
     }
+    public List<T> showAll() {
+        List<T> allData = readAll();
+        return allData;
+    }
 
 }
 /*

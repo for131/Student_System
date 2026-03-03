@@ -22,4 +22,8 @@ public class TutorService {
             }
         }
     }
+
+    public List<TutorRequirement> getAllRequirements() {
+        return reqDao.showAll();
+    }
 }
