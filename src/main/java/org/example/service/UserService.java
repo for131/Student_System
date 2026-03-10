@@ -14,12 +14,26 @@ public class UserService {
         List<User> users = userdao.findLits(u -> u.getUsername().equals(name));
         if(!users.isEmpty()){
             User user = users.get(0);
-            System.out.println("数据库中的密码: [" + user.getPassword() + "]");
-            System.out.println("输入的密码: [" + password + "]");
+            // 检查账户是否被禁用（密码以 !DISABLED! 开头）
+            if (user.getPassword() != null && user.getPassword().startsWith("!DISABLED!")) {
+                return false; // 禁用账户直接拒绝，调用方可通过 isAccountDisabled() 区分
+            }
+//            System.out.println("数据库中的密码: [" + user.getPassword() + "]");
+//            System.out.println("输入的密码: [" + password + "]");
             if(user.getPassword().equals(password)){
                 currentUser = user;
                 return true;
             }
+        }
+        return false;
+    }
+
+    /** 检查用户名对应账户是否被禁用 */
+    public boolean isAccountDisabled(String username) {
+        List<User> users = userdao.findLits(u -> u.getUsername().equals(username));
+        if (!users.isEmpty()) {
+            String pwd = users.get(0).getPassword();
+            return pwd != null && pwd.startsWith("!DISABLED!");
         }
         return false;
     }
@@ -40,5 +54,5 @@ public class UserService {
 
     /*
 
- */
+     */
 }

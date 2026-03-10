@@ -44,10 +44,13 @@ public class DashboardView extends JFrame {
         setContentPane(root);
         setVisible(true);
 
-        // 默认显示第一个面板
+        // 默认显示第一个面板（需求页）
         if (!navItems.isEmpty()) {
             navItems.get(0).button.doClick();
         }
+
+        // 公告以弹窗形式展示
+        SwingUtilities.invokeLater(() -> MainMenu.showAnnouncementDialog(this));
     }
 
     // ── 侧边栏 ──────────────────────────────────────────────
@@ -102,15 +105,18 @@ public class DashboardView extends JFrame {
         String role = currentUser.getRole();
         switch (role) {
             case "Student" -> {
-                navItems.add(new NavItem("🏠", "首页公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
-                navItems.add(new NavItem("👤", "我的信息", () -> showPanel(MainMenu.buildStudentProfilePanel((Student) currentUser))));
                 navItems.add(new NavItem("📋", "家教需求", () -> showPanel(MainMenu.buildRequirementListPanel(currentUser))));
+                navItems.add(new NavItem("👤", "我的信息", () -> showPanel(MainMenu.buildStudentProfilePanel((Student) currentUser))));
+                navItems.add(new NavItem("📣", "系统公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
+                navItems.add(new NavItem("🔑", "账号设置", () -> showPanel(MainMenu.buildAccountSettingsPanel(currentUser))));
             }
             case "Parent" -> {
-                navItems.add(new NavItem("🏠", "首页公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
+                navItems.add(new NavItem("🔍", "浏览学生", () -> showPanel(MainMenu.buildBrowseStudentsPanel())));
                 navItems.add(new NavItem("➕", "发布需求", () -> showPanel(MainMenu.buildPostRequirementPanel(currentUser))));
                 navItems.add(new NavItem("📋", "我的需求", () -> showPanel(MainMenu.buildMyRequirementPanel(currentUser))));
-                navItems.add(new NavItem("🔍", "浏览学生", () -> showPanel(MainMenu.buildBrowseStudentsPanel())));
+                navItems.add(new NavItem("👤", "我的信息", () -> showPanel(MainMenu.buildParentEditPanel(currentUser))));
+                navItems.add(new NavItem("📣", "系统公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
+                navItems.add(new NavItem("🔑", "账号设置", () -> showPanel(MainMenu.buildAccountSettingsPanel(currentUser))));
             }
             case "Admin" -> {
                 navItems.add(new NavItem("🏠", "系统概况", () -> showPanel(MainMenu.buildAdminOverviewPanel())));
@@ -118,6 +124,7 @@ public class DashboardView extends JFrame {
                 navItems.add(new NavItem("📣", "发布公告", () -> showPanel(MainMenu.buildPublishAnnouncementPanel())));
                 navItems.add(new NavItem("📋", "需求管理", () -> showPanel(MainMenu.buildAllRequirementsPanel())));
                 navItems.add(new NavItem("✅", "审核学生", () -> showPanel(MainMenu.buildStudentAuditPanel())));
+                navItems.add(new NavItem("🔔", "查看公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
             }
             default -> {
                 navItems.add(new NavItem("🏠", "首页", () -> showPanel(MainMenu.buildAnnouncementPanel())));

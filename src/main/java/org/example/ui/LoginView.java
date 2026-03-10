@@ -45,7 +45,7 @@ public class LoginView extends JFrame {
 
     public LoginView() {
         UITheme.applyGlobalFont();
-        setTitle("家教匹配系统 - 登录");
+        setTitle("大学生家教服务系统 - 登录");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(860, 560);
         setLocationRelativeTo(null);
@@ -98,12 +98,12 @@ public class LoginView extends JFrame {
         gbc.anchor = GridBagConstraints.CENTER;
 
         // Logo图标（emoji替代）
-        JLabel icon = new JLabel("🎓");
+        JLabel icon = new JLabel("^v^");
         icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 52));
         icon.setHorizontalAlignment(SwingConstants.CENTER);
         panel.add(icon, gbc);
 
-        JLabel title = new JLabel("家教匹配系统");
+        JLabel title = new JLabel("大学生家教服务系统");
         title.setFont(UITheme.font(Font.BOLD, 24));
         title.setForeground(Color.WHITE);
         panel.add(title, gbc);
@@ -136,7 +136,7 @@ public class LoginView extends JFrame {
         // 关闭按钮（右上角）
         JPanel topBar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
         topBar.setBackground(UITheme.BG_MAIN);
-        JButton closeBtn = new JButton("✕");
+        JButton closeBtn = new JButton("x");
         closeBtn.setFont(UITheme.font(Font.BOLD, 14));
         closeBtn.setForeground(UITheme.TEXT_SUB);
         closeBtn.setBorderPainted(false);

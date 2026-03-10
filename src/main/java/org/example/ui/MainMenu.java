@@ -22,6 +22,33 @@ public class MainMenu {
     private static final AnnouncementDao announceDao = new AnnouncementDao();
     private static final AdminService adminService   = new AdminService();
 
+    // =====================================================================
+    //  advantage 字段编解码工具
+    //  存储格式：「个人优势文本||RURL:https://...||VCODE:ABC123」
+    // =====================================================================
+    static String advText(String raw) {
+        if (raw == null) return "";
+        int i = raw.indexOf("||RURL:");
+        return i >= 0 ? raw.substring(0, i) : raw;
+    }
+    static String advReportUrl(String raw) {
+        if (raw == null) return "";
+        int s = raw.indexOf("||RURL:"); if (s < 0) return "";
+        String rest = raw.substring(s + 7);
+        int e = rest.indexOf("||VCODE:"); return e >= 0 ? rest.substring(0, e) : rest;
+    }
+    static String advVerifyCode(String raw) {
+        if (raw == null) return "";
+        int s = raw.indexOf("||VCODE:"); return s >= 0 ? raw.substring(s + 8) : "";
+    }
+    static String buildAdv(String text, String url, String code) {
+        String base = text == null ? "" : text.trim();
+        String u    = url  == null ? "" : url.trim();
+        String c    = code == null ? "" : code.trim();
+        if (u.isEmpty() && c.isEmpty()) return base;
+        return base + "||RURL:" + u + (c.isEmpty() ? "" : "||VCODE:" + c);
+    }
+
     public static JPanel buildAnnouncementPanel() {
         JPanel root = pageRoot("📣  系统公告");
         List<Announcement> list = announceDao.readAll();
@@ -48,6 +75,64 @@ public class MainMenu {
         return root;
     }
 
+    /** 以弹窗形式展示公告（进入系统后自动弹出） */
+    public static void showAnnouncementDialog(java.awt.Component parent) {
+        List<Announcement> list = announceDao.readAll();
+        if (list.isEmpty()) return;
+        String now = UserService.getCurrentUser().getRole();
+        if(now.equals("Admin")) return;
+
+        JDialog dialog = new JDialog((JFrame) SwingUtilities.getWindowAncestor(parent), "📣 系统公告", true);
+        dialog.setSize(520, 420);
+        dialog.setLocationRelativeTo(parent);
+        dialog.setResizable(false);
+
+        JPanel root = new JPanel(new BorderLayout(0, 0));
+        root.setBackground(UITheme.BG_MAIN);
+        root.setBorder(BorderFactory.createEmptyBorder(20, 24, 16, 24));
+
+        JLabel title = UITheme.titleLabel("最新公告");
+        title.setBorder(BorderFactory.createEmptyBorder(0, 0, 12, 0));
+        root.add(title, BorderLayout.NORTH);
+
+        JPanel grid = new JPanel(new GridLayout(0, 1, 0, 10));
+        grid.setOpaque(false);
+        // 最多展示最近3条
+        List<Announcement> recent = list.size() > 3 ? list.subList(list.size() - 3, list.size()) : list;
+        for (Announcement a : recent) {
+            JPanel card = UITheme.card();
+            card.setLayout(new BorderLayout(8, 4));
+            JLabel t = new JLabel("📌 " + a.getTitle());
+            t.setFont(UITheme.FONT_H3); t.setForeground(UITheme.PRIMARY);
+            JLabel time = new JLabel(a.getPublishtime());
+            time.setFont(UITheme.FONT_SMALL); time.setForeground(UITheme.TEXT_LIGHT);
+            JTextArea content = new JTextArea(a.getContent());
+            content.setFont(UITheme.FONT_SMALL); content.setForeground(UITheme.TEXT_MAIN);
+            content.setWrapStyleWord(true); content.setLineWrap(true);
+            content.setEditable(false); content.setOpaque(false);
+            JPanel header = new JPanel(new BorderLayout());
+            header.setOpaque(false); header.add(t, BorderLayout.WEST); header.add(time, BorderLayout.EAST);
+            card.add(header, BorderLayout.NORTH); card.add(content, BorderLayout.CENTER);
+            grid.add(card);
+        }
+        JScrollPane scroll = new JScrollPane(grid);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setOpaque(false); scroll.getViewport().setOpaque(false);
+        root.add(scroll, BorderLayout.CENTER);
+
+        JButton closeBtn = UITheme.primaryButton("知道了");
+        closeBtn.setPreferredSize(new Dimension(120, 36));
+        closeBtn.addActionListener(e -> dialog.dispose());
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        btnPanel.setOpaque(false);
+        btnPanel.setBorder(BorderFactory.createEmptyBorder(12, 0, 0, 0));
+        btnPanel.add(closeBtn);
+        root.add(btnPanel, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.setVisible(true);
+    }
+
     public static JPanel buildStudentProfilePanel(Student student) {
         JPanel root = pageRoot("👤  我的信息");
         JPanel card = UITheme.card();
@@ -69,58 +154,460 @@ public class MainMenu {
         JLabel editTitle = new JLabel("── 教学信息（对家长可见）──");
         editTitle.setFont(UITheme.font(Font.BOLD, 12)); editTitle.setForeground(UITheme.TEXT_LIGHT);
         card.add(editTitle, gbc);
-        JTextField subjectField   = UITheme.roundedField("可辅导的学科");
-        JTextField gradeField2    = UITheme.roundedField("可辅导的年级段");
-        JTextField priceField     = UITheme.roundedField("收费标准，如：100元/小时");
-        JTextField wayField       = UITheme.roundedField("上门/线上/均可");
+
+        JTextField subjectField   = UITheme.roundedField("可辅导的学科，如：数学、英语");
+        JTextField gradeField2    = UITheme.roundedField("可辅导的年级段，如：小学、初中");
         JTextField advantageField = UITheme.roundedField("获奖经历、擅长科目等");
         JSpinner expSpinner = new JSpinner(new SpinnerNumberModel(student.getExperience(), 0, 20, 1));
+
+        // ── 辅导方式复选框 + 分价格 ──────────────────────────
+        JCheckBox offlineCheck = new JCheckBox("线下上门");
+        JCheckBox onlineCheck  = new JCheckBox("线上授课");
+        offlineCheck.setFont(UITheme.FONT_LABEL); offlineCheck.setOpaque(false);
+        onlineCheck.setFont(UITheme.FONT_LABEL);  onlineCheck.setOpaque(false);
+
+        JTextField offlinePriceField = UITheme.roundedField("线下收费，如：150元/小时");
+        JTextField onlinePriceField  = UITheme.roundedField("线上收费，如：100元/小时");
+        offlinePriceField.setEnabled(false);
+        onlinePriceField.setEnabled(false);
+
+        // 解析已保存 way 字段（格式："线下:150元/小时|线上:100元/小时"）
+        if (student.getWay() != null) {
+            for (String part : student.getWay().split("\\|")) {
+                if (part.startsWith("线下:")) {
+                    offlineCheck.setSelected(true);
+                    offlinePriceField.setEnabled(true);
+                    offlinePriceField.setText(part.substring(3));
+                } else if (part.startsWith("线上:")) {
+                    onlineCheck.setSelected(true);
+                    onlinePriceField.setEnabled(true);
+                    onlinePriceField.setText(part.substring(3));
+                }
+            }
+        }
         if (student.getSubject()      != null) subjectField.setText(student.getSubject());
         if (student.getTargetGrages() != null) gradeField2.setText(student.getTargetGrages());
-        if (student.getPrice()        != null) priceField.setText(student.getPrice());
-        if (student.getWay()          != null) wayField.setText(student.getWay());
-        if (student.getAdvantage()    != null) advantageField.setText(student.getAdvantage());
+        // advantage 字段只显示纯文本部分（URL/验证码在下方专区）
+        advantageField.setText(advText(student.getAdvantage()));
+
+        offlineCheck.addActionListener(e -> offlinePriceField.setEnabled(offlineCheck.isSelected()));
+        onlineCheck.addActionListener(e  -> onlinePriceField.setEnabled(onlineCheck.isSelected()));
+
+        // 辅导方式行：两个复选框并排
+        JPanel wayRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        wayRow.setOpaque(false);
+        wayRow.add(offlineCheck); wayRow.add(onlineCheck);
+        JPanel wayFormRow = new JPanel(new BorderLayout(10, 0));
+        wayFormRow.setOpaque(false);
+        JLabel wayLbl = new JLabel("辅导方式");
+        wayLbl.setFont(UITheme.FONT_LABEL); wayLbl.setForeground(UITheme.TEXT_SUB);
+        wayLbl.setPreferredSize(new Dimension(90, 38)); wayLbl.setHorizontalAlignment(SwingConstants.RIGHT);
+        wayFormRow.add(wayLbl, BorderLayout.WEST); wayFormRow.add(wayRow, BorderLayout.CENTER);
+
         card.add(UITheme.formRow("辅导科目", subjectField), gbc);
         card.add(UITheme.formRow("辅导年级", gradeField2), gbc);
-        card.add(UITheme.formRow("收费标准", priceField), gbc);
-        card.add(UITheme.formRow("辅导方式", wayField), gbc);
+        card.add(wayFormRow, gbc);
+        card.add(UITheme.formRow("线下价格", offlinePriceField), gbc);
+        card.add(UITheme.formRow("线上价格", onlinePriceField), gbc);
         card.add(UITheme.formRow("家教经验(年)", expSpinner), gbc);
         card.add(UITheme.formRow("个人优势", advantageField), gbc);
+
+        // ── 学历在线验证专区（新增）──────────────────────────
+        card.add(sectionSep("── 学历在线验证（供家长核验）──"), gbc);
+
+        JTextField reportUrlField  = UITheme.roundedField("在线查验网址，如：https://www.chsi.com.cn/...");
+        JTextField verifyCodeField = UITheme.roundedField("在线验证码，如：ABCD1234");
+        // 读取已保存的查验网址和验证码（从 advantage 字段编码中解析）
+        reportUrlField.setText(advReportUrl(student.getAdvantage()));
+        verifyCodeField.setText(advVerifyCode(student.getAdvantage()));
+
+        JLabel verifyStatusLbl = buildVerifyStatusLabel(student.getAdvantage());
+        card.add(UITheme.formRow("查验网址", reportUrlField), gbc);
+        card.add(UITheme.formRow("验证码", verifyCodeField), gbc);
+        card.add(verifyStatusLbl, gbc);
+
+        // 提示密码修改入口
+        JLabel pwdHintLbl = new JLabel("  🔒 如需修改密码，请点击左侧「账号设置」");
+        pwdHintLbl.setFont(UITheme.FONT_SMALL); pwdHintLbl.setForeground(UITheme.TEXT_LIGHT);
+        card.add(pwdHintLbl, gbc);
+
         JButton saveBtn = UITheme.primaryButton("保存信息");
         saveBtn.setPreferredSize(new Dimension(140, 38));
         card.add(centerWrap(saveBtn), gbc);
+
         saveBtn.addActionListener(e -> {
+            if (!offlineCheck.isSelected() && !onlineCheck.isSelected()) {
+                UITheme.showError(saveBtn, "请至少选择一种辅导方式！"); return;
+            }
+            StringBuilder wayBuilder = new StringBuilder();
+            if (offlineCheck.isSelected()) {
+                String p = offlinePriceField.getText().trim();
+                if (p.isEmpty()) { UITheme.showError(saveBtn, "请填写线下收费标准！"); return; }
+                wayBuilder.append("线下:").append(p);
+            }
+            if (onlineCheck.isSelected()) {
+                String p = onlinePriceField.getText().trim();
+                if (p.isEmpty()) { UITheme.showError(saveBtn, "请填写线上收费标准！"); return; }
+                if (wayBuilder.length() > 0) wayBuilder.append("|");
+                wayBuilder.append("线上:").append(p);
+            }
+            StringBuilder priceDisplay = new StringBuilder();
+            if (offlineCheck.isSelected()) priceDisplay.append("线下").append(offlinePriceField.getText().trim());
+            if (onlineCheck.isSelected()) {
+                if (priceDisplay.length() > 0) priceDisplay.append(" / ");
+                priceDisplay.append("线上").append(onlinePriceField.getText().trim());
+            }
+            // 将优势文本 + 查验网址 + 验证码合并编码存入 advantage 字段
+            String newAdv = buildAdv(
+                    advantageField.getText().trim(),
+                    reportUrlField.getText().trim(),
+                    verifyCodeField.getText().trim());
             student.setSubject(subjectField.getText().trim());
             student.setTargetGrages(gradeField2.getText().trim());
-            student.setPrice(priceField.getText().trim());
-            student.setWay(wayField.getText().trim());
-            student.setAdvantage(advantageField.getText().trim());
+            student.setPrice(priceDisplay.toString());
+            student.setWay(wayBuilder.toString());
+            student.setAdvantage(newAdv);
             student.setExperience((Integer) expSpinner.getValue());
             student.setVisible(student.getAccept() == 1 && !Validator.isEmpty(student.getSubject()));
+            // 调用 BaseDao.update(Predicate, item) 持久化到 users.json
             userDao.update(u -> u.getUsername().equals(student.getUsername()), student);
             UserService.currentUser = student;
+            // 刷新验证状态标签
+            String urlNow = advReportUrl(newAdv);
+            if (urlNow.isEmpty()) {
+                verifyStatusLbl.setText("  ⚠ 未填写查验网址，家长暂无法核验学历");
+                verifyStatusLbl.setForeground(UITheme.WARNING);
+            } else {
+                String cp = advVerifyCode(newAdv).isEmpty() ? "（未填验证码）" : " + 验证码";
+                verifyStatusLbl.setText("  ✅ 已填写查验网址" + cp);
+                verifyStatusLbl.setForeground(UITheme.SUCCESS);
+            }
             UITheme.showSuccess(saveBtn, "保存成功！");
         });
         root.add(scrollPane(card), BorderLayout.CENTER);
         return root;
     }
 
+    /** 构建学历验证状态标签 */
+    private static JLabel buildVerifyStatusLabel(String raw) {
+        String url = advReportUrl(raw);
+        JLabel lbl;
+        if (url.isEmpty()) {
+            lbl = new JLabel("  ⚠ 未填写查验网址，家长暂无法核验学历");
+            lbl.setForeground(UITheme.WARNING);
+        } else {
+            String cp = advVerifyCode(raw).isEmpty() ? "（未填验证码）" : " + 验证码";
+            lbl = new JLabel("  ✅ 已填写查验网址" + cp);
+            lbl.setForeground(UITheme.SUCCESS);
+        }
+        lbl.setFont(UITheme.FONT_SMALL);
+        return lbl;
+    }
+
+    // =====================================================================
+    //  「账号设置」面板 —— 学生和家长通用
+    //  · 修改姓名 / 手机号  →  userDao.update(Predicate, item)
+    //  · 修改密码           →  userDao.findLits(Predicate) 校验旧密码
+    //                          userDao.update(Predicate, item) 持久化
+    //  · 同步 UserService.currentUser 内存状态
+    // =====================================================================
+    public static JPanel buildAccountSettingsPanel(User currentUser) {
+        JPanel root = pageRoot("🔑  账号设置");
+        JPanel card = UITheme.card();
+        card.setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0; gbc.gridy = GridBagConstraints.RELATIVE;
+        gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
+        gbc.insets = new Insets(8, 0, 8, 0);
+
+        // ── 只读账号信息 ─────────────────────────────────────
+        card.add(infoRow("用户名", currentUser.getUsername()), gbc);
+        card.add(infoRow("角　色", roleLabel(currentUser.getRole())), gbc);
+
+        // ── 修改基本信息 ─────────────────────────────────────
+        card.add(sectionSep("── 修改基本信息 ──"), gbc);
+        JTextField nameField  = UITheme.roundedField("真实姓名");
+        JTextField phoneField = UITheme.roundedField("手机号");
+        if (currentUser.getName()  != null) nameField.setText(currentUser.getName());
+        if (currentUser.getPhone() != null) phoneField.setText(currentUser.getPhone());
+        card.add(UITheme.formRow("姓　　名 *", nameField), gbc);
+        card.add(UITheme.formRow("手　机　号 *", phoneField), gbc);
+
+        JButton saveInfoBtn = UITheme.primaryButton("保存基本信息");
+        saveInfoBtn.setPreferredSize(new Dimension(160, 38));
+        card.add(centerWrap(saveInfoBtn), gbc);
+
+        saveInfoBtn.addActionListener(e -> {
+            String name  = nameField.getText().trim();
+            String phone = phoneField.getText().trim();
+            if (Validator.isEmpty(name))  { UITheme.showError(saveInfoBtn, "姓名不能为空！"); return; }
+            if (Validator.isEmpty(phone)) { UITheme.showError(saveInfoBtn, "手机号不能为空！"); return; }
+            currentUser.setName(name);
+            currentUser.setPhone(phone);
+            // BaseDao.update(Predicate, item) 持久化到 users.json
+            userDao.update(u -> u.getUsername().equals(currentUser.getUsername()), currentUser);
+            UserService.currentUser = currentUser;
+            UITheme.showSuccess(saveInfoBtn, "基本信息已保存！");
+        });
+
+        // ── 修改密码 ─────────────────────────────────────────
+        card.add(sectionSep("── 修改密码 ──"), gbc);
+        JPasswordField oldPwdField  = UITheme.roundedPasswordField();
+        JPasswordField newPwdField  = UITheme.roundedPasswordField();
+        JPasswordField newPwdField2 = UITheme.roundedPasswordField();
+        oldPwdField.setToolTipText("请输入当前密码");
+        newPwdField.setToolTipText("新密码（至少6位）");
+        newPwdField2.setToolTipText("再次输入新密码确认");
+        card.add(UITheme.formRow("当前密码 *", oldPwdField), gbc);
+        card.add(UITheme.formRow("新　密　码 *", newPwdField), gbc);
+        card.add(UITheme.formRow("确认新密码 *", newPwdField2), gbc);
+
+        // 实时密码强度指示
+        JLabel strengthLbl = new JLabel(" ");
+        strengthLbl.setFont(UITheme.FONT_SMALL);
+        card.add(strengthLbl, gbc);
+        newPwdField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            void refresh() {
+                String pwd = new String(newPwdField.getPassword());
+                if (pwd.isEmpty()) { strengthLbl.setText(" "); return; }
+                int score = 0;
+                if (pwd.length() >= 6)               score++;
+                if (pwd.length() >= 10)              score++;
+                if (pwd.matches(".*[A-Z].*"))         score++;
+                if (pwd.matches(".*[0-9].*"))         score++;
+                if (pwd.matches(".*[^A-Za-z0-9].*")) score++;
+                String[] lvl = {"  强度：很弱", "  强度：弱", "  强度：一般", "  强度：较强", "  强度：强"};
+                Color[]  clr = {UITheme.DANGER, UITheme.DANGER, UITheme.WARNING, UITheme.SUCCESS, UITheme.SUCCESS};
+                int idx = Math.min(score, 4);
+                strengthLbl.setText(lvl[idx]);
+                strengthLbl.setForeground(clr[idx]);
+            }
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e)  { refresh(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e)  { refresh(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { refresh(); }
+        });
+
+        JButton changePwdBtn = UITheme.primaryButton("修改密码");
+        changePwdBtn.setPreferredSize(new Dimension(140, 38));
+        card.add(centerWrap(changePwdBtn), gbc);
+
+        changePwdBtn.addActionListener(e -> {
+            String oldPwd  = new String(oldPwdField.getPassword()).trim();
+            String newPwd  = new String(newPwdField.getPassword()).trim();
+            String newPwd2 = new String(newPwdField2.getPassword()).trim();
+            if (Validator.isEmpty(oldPwd))  { UITheme.showError(changePwdBtn, "请输入当前密码！"); return; }
+            if (Validator.isEmpty(newPwd))  { UITheme.showError(changePwdBtn, "请输入新密码！"); return; }
+            if (newPwd.length() < 6)        { UITheme.showError(changePwdBtn, "新密码不能少于6位！"); return; }
+            if (!newPwd.equals(newPwd2))    { UITheme.showError(changePwdBtn, "两次密码输入不一致！"); return; }
+            if (newPwd.equals(oldPwd))      { UITheme.showError(changePwdBtn, "新密码不能与当前密码相同！"); return; }
+            // 调用 BaseDao.findLits(Predicate) 校验旧密码是否正确
+            List<User> matched = userDao.findLits(
+                    u -> u.getUsername().equals(currentUser.getUsername())
+                            && u.getPassword().equals(oldPwd));
+            if (matched.isEmpty()) { UITheme.showError(changePwdBtn, "当前密码不正确！"); return; }
+            // 调用 BaseDao.update(Predicate, item) 持久化新密码
+            currentUser.setPassword(newPwd);
+            userDao.update(u -> u.getUsername().equals(currentUser.getUsername()), currentUser);
+            UserService.currentUser = currentUser;
+            oldPwdField.setText(""); newPwdField.setText(""); newPwdField2.setText("");
+            strengthLbl.setText(" ");
+            UITheme.showSuccess(changePwdBtn, "密码修改成功！");
+        });
+
+        root.add(scrollPane(card), BorderLayout.CENTER);
+        return root;
+    }
+
+    private static String roleLabel(String role) {
+        return switch (role) {
+            case "Student" -> "学生";
+            case "Parent"  -> "家长";
+            case "Admin"   -> "管理员";
+            default        -> role;
+        };
+    }
+
     public static JPanel buildRequirementListPanel(User currentUser) {
         JPanel root = pageRoot("📋  家教需求列表");
-        List<TutorRequirement> list = requireDao.findLits(r -> !r.isClosed());
-        if (list.isEmpty()) { root.add(emptyHint("暂无开放的家教需求"), BorderLayout.CENTER); return root; }
+        List<TutorRequirement> allList = requireDao.findLits(r -> !r.isClosed());
+
+        // ── 搜索栏 ──────────────────────────────────────────
+        JPanel searchBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        searchBar.setOpaque(false);
+        searchBar.setBorder(BorderFactory.createEmptyBorder(0, 0, 12, 0));
+
+        JTextField gradeSearch = UITheme.roundedField("");
+        gradeSearch.setPreferredSize(new Dimension(160, 34));
+        gradeSearch.setToolTipText("按年级搜索，如：小学、初中、高中");
+        // 占位提示
+        gradeSearch.setText("按年级搜索…");
+        gradeSearch.setForeground(UITheme.TEXT_LIGHT);
+        gradeSearch.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent e) {
+                if (gradeSearch.getText().equals("按年级搜索…")) { gradeSearch.setText(""); gradeSearch.setForeground(UITheme.TEXT_MAIN); }
+            }
+            public void focusLost(java.awt.event.FocusEvent e) {
+                if (gradeSearch.getText().isEmpty()) { gradeSearch.setText("按年级搜索…"); gradeSearch.setForeground(UITheme.TEXT_LIGHT); }
+            }
+        });
+
+        JTextField priceSearch = UITheme.roundedField("");
+        priceSearch.setPreferredSize(new Dimension(160, 34));
+        priceSearch.setToolTipText("输入最高薪酬数字，筛选 ≤ 该值的需求，如：150");
+        priceSearch.setText("薪酬上限（如：150）…");
+        priceSearch.setForeground(UITheme.TEXT_LIGHT);
+        priceSearch.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent e) {
+                if (priceSearch.getText().equals("薪酬上限（如：150）…")) { priceSearch.setText(""); priceSearch.setForeground(UITheme.TEXT_MAIN); }
+            }
+            public void focusLost(java.awt.event.FocusEvent e) {
+                if (priceSearch.getText().isEmpty()) { priceSearch.setText("薪酬上限（如：150）…"); priceSearch.setForeground(UITheme.TEXT_LIGHT); }
+            }
+        });
+
+        JButton searchBtn = UITheme.primaryButton("🔍 搜索");
+        searchBtn.setPreferredSize(new Dimension(90, 34));
+        JButton resetBtn  = UITheme.secondaryButton("重置");
+        resetBtn.setPreferredSize(new Dimension(70, 34));
+
+        JLabel hintLbl = new JLabel("  年级：模糊匹配；薪酬：输入数字，展示 ≤ 该值的所有需求");
+        hintLbl.setFont(UITheme.FONT_SMALL); hintLbl.setForeground(UITheme.TEXT_LIGHT);
+
+        searchBar.add(gradeSearch); searchBar.add(priceSearch);
+        searchBar.add(searchBtn);   searchBar.add(resetBtn);
+        searchBar.add(hintLbl);
+
+        // ── 表格区（可动态刷新） ────────────────────────────
         String[] cols = {"需求ID", "发布家长", "科目", "年级", "地址", "薪酬", "时间", "要求"};
-        Object[][] data = new Object[list.size()][cols.length];
-        for (int i = 0; i < list.size(); i++) {
-            TutorRequirement r = list.get(i);
-            data[i] = new Object[]{r.getReqID(), r.getParentUsername(), r.getSubject(),
-                    r.getGradeLevel(), r.getAddress(), r.getMoney(), r.getDuration(), r.getNeed()};
+        JPanel tableHolder = new JPanel(new BorderLayout());
+        tableHolder.setOpaque(false);
+
+        Runnable refreshTable = () -> {
+            String gKw = gradeSearch.getText().equals("按年级搜索…") ? "" : gradeSearch.getText().trim().toLowerCase();
+            String pRaw = priceSearch.getText().equals("薪酬上限（如：150）…") ? "" : priceSearch.getText().trim();
+            // 解析价格上限
+            int priceMax = Integer.MAX_VALUE;
+            if (!pRaw.isEmpty()) {
+                try { priceMax = Integer.parseInt(pRaw.replaceAll("[^0-9]", "")); }
+                catch (NumberFormatException ignored) {}
+            }
+            final int maxVal = priceMax;
+            List<TutorRequirement> filtered = allList.stream()
+                    .filter(r -> gKw.isEmpty() || (r.getGradeLevel() != null && r.getGradeLevel().toLowerCase().contains(gKw)))
+                    .filter(r -> {
+                        if (maxVal == Integer.MAX_VALUE) return true;
+                        if (r.getMoney() == null) return false;
+                        try {
+                            int val = Integer.parseInt(r.getMoney().replaceAll("[^0-9]", ""));
+                            return val <= maxVal;
+                        } catch (NumberFormatException e) { return false; }
+                    })
+                    .toList();
+            tableHolder.removeAll();
+            if (filtered.isEmpty()) {
+                tableHolder.add(emptyHint("没有符合条件的需求，请调整搜索条件"), BorderLayout.CENTER);
+            } else {
+                Object[][] data = new Object[filtered.size()][cols.length];
+                for (int i = 0; i < filtered.size(); i++) {
+                    TutorRequirement r = filtered.get(i);
+                    data[i] = new Object[]{r.getReqID(), r.getParentUsername(), r.getSubject(),
+                            r.getGradeLevel(), r.getAddress(), r.getMoney(), r.getDuration(), r.getNeed()};
+                }
+                JTable table = styledTable(data, cols);
+                JScrollPane scroll = new JScrollPane(table);
+                scroll.setBorder(BorderFactory.createEmptyBorder());
+                scroll.getViewport().setBackground(Color.WHITE);
+                tableHolder.add(scroll, BorderLayout.CENTER);
+            }
+            tableHolder.revalidate(); tableHolder.repaint();
+        };
+
+        searchBtn.addActionListener(e -> refreshTable.run());
+        resetBtn.addActionListener(e -> {
+            gradeSearch.setText("按年级搜索…"); gradeSearch.setForeground(UITheme.TEXT_LIGHT);
+            priceSearch.setText("薪酬上限（如：150）…"); priceSearch.setForeground(UITheme.TEXT_LIGHT);
+            refreshTable.run();
+        });
+        // 支持回车触发搜索
+        gradeSearch.addActionListener(e -> refreshTable.run());
+        priceSearch.addActionListener(e -> refreshTable.run());
+
+        if (allList.isEmpty()) {
+            tableHolder.add(emptyHint("暂无开放的家教需求"), BorderLayout.CENTER);
+        } else {
+            refreshTable.run();
         }
-        JTable table = styledTable(data, cols);
-        JScrollPane scroll = new JScrollPane(table);
-        scroll.setBorder(BorderFactory.createEmptyBorder());
-        scroll.getViewport().setBackground(Color.WHITE);
-        root.add(scroll, BorderLayout.CENTER);
+
+        // 把搜索栏加到 pageRoot 的 NORTH 下方
+        JPanel northPanel = new JPanel(new BorderLayout());
+        northPanel.setOpaque(false);
+        // 取出原有 titleBar 放入 northPanel 顶部
+        Component titleBar = root.getComponent(0);
+        root.remove(titleBar);
+        northPanel.add(titleBar, BorderLayout.NORTH);
+        northPanel.add(searchBar, BorderLayout.SOUTH);
+        root.add(northPanel, BorderLayout.NORTH);
+        root.add(tableHolder, BorderLayout.CENTER);
+        return root;
+    }
+
+    /** 家长编辑个人信息 */
+    public static JPanel buildParentEditPanel(User currentUser) {
+        JPanel root = pageRoot("👤  我的信息");
+        JPanel card = UITheme.card();
+        card.setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0; gbc.gridy = GridBagConstraints.RELATIVE;
+        gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
+        gbc.insets = new Insets(8, 0, 8, 0);
+
+        card.add(infoRow("用户名", currentUser.getUsername()), gbc);
+        card.add(infoRow("当前角色", "家长"), gbc);
+
+        JLabel sep = new JLabel("── 可修改信息 ──");
+        sep.setFont(UITheme.font(Font.BOLD, 12)); sep.setForeground(UITheme.TEXT_LIGHT);
+        card.add(sep, gbc);
+
+        JTextField nameField  = UITheme.roundedField("真实姓名");
+        JTextField phoneField = UITheme.roundedField("手机号");
+        JPasswordField pwdField    = UITheme.roundedPasswordField();
+        JPasswordField pwdConfirm  = UITheme.roundedPasswordField();
+        pwdField.setToolTipText("留空则不修改密码");
+        pwdConfirm.setToolTipText("再次输入新密码");
+
+        if (currentUser.getName()  != null) nameField.setText(currentUser.getName());
+        if (currentUser.getPhone() != null) phoneField.setText(currentUser.getPhone());
+
+        card.add(UITheme.formRow("姓　　名", nameField), gbc);
+        card.add(UITheme.formRow("手　机　号", phoneField), gbc);
+
+        JLabel pwdHint = new JLabel("── 修改密码（留空不修改）──");
+        pwdHint.setFont(UITheme.font(Font.BOLD, 12)); pwdHint.setForeground(UITheme.TEXT_LIGHT);
+        card.add(pwdHint, gbc);
+        card.add(UITheme.formRow("新密码", pwdField), gbc);
+        card.add(UITheme.formRow("确认新密码", pwdConfirm), gbc);
+
+        JButton saveBtn = UITheme.primaryButton("保存修改");
+        saveBtn.setPreferredSize(new Dimension(140, 38));
+        card.add(centerWrap(saveBtn), gbc);
+
+        saveBtn.addActionListener(e -> {
+            String name  = nameField.getText().trim();
+            String phone = phoneField.getText().trim();
+            String pwd   = new String(pwdField.getPassword()).trim();
+            String pwd2  = new String(pwdConfirm.getPassword()).trim();
+            if (Validator.isEmpty(name))  { UITheme.showError(saveBtn, "姓名不能为空！"); return; }
+            if (Validator.isEmpty(phone)) { UITheme.showError(saveBtn, "手机号不能为空！"); return; }
+            if (!pwd.isEmpty() && !pwd.equals(pwd2)) { UITheme.showError(saveBtn, "两次密码输入不一致！"); return; }
+            currentUser.setName(name);
+            currentUser.setPhone(phone);
+            if (!pwd.isEmpty()) currentUser.setPassword(pwd);
+            userDao.update(u -> u.getUsername().equals(currentUser.getUsername()), currentUser);
+            UserService.currentUser = currentUser;
+            UITheme.showSuccess(saveBtn, "信息修改成功！");
+        });
+
+        root.add(scrollPane(card), BorderLayout.CENTER);
         return root;
     }
 
@@ -215,17 +702,199 @@ public class MainMenu {
 
     public static JPanel buildBrowseStudentsPanel() {
         JPanel root = pageRoot("🔍  浏览大学生家教");
-        List<User> users = userDao.findLits(u -> u.getRole().equals("Student"));
-        List<Student> visible = users.stream()
+        List<Student> allVisible = userDao.readAll().stream()
                 .filter(u -> u instanceof Student).map(u -> (Student) u)
                 .filter(s -> s.isVisible() && s.getAccept() == 1).toList();
-        if (visible.isEmpty()) { root.add(emptyHint("暂无通过审核的学生展示"), BorderLayout.CENTER); return root; }
-        JPanel grid = new JPanel(new GridLayout(0, 2, 16, 16));
-        grid.setOpaque(false);
-        for (Student s : visible) grid.add(buildStudentCard(s));
-        root.add(scrollPane(grid), BorderLayout.CENTER);
+
+        // ── 搜索栏 ──────────────────────────────────────────
+        JPanel searchBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        searchBar.setOpaque(false);
+        searchBar.setBorder(BorderFactory.createEmptyBorder(0, 0, 12, 0));
+
+        JTextField gradeSearch = UITheme.roundedField("");
+        gradeSearch.setPreferredSize(new Dimension(160, 34));
+        gradeSearch.setToolTipText("按可辅导年级搜索，如：小学、初中、高中");
+        gradeSearch.setText("按可辅导年级搜索…");
+        gradeSearch.setForeground(UITheme.TEXT_LIGHT);
+        gradeSearch.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent e) {
+                if (gradeSearch.getText().equals("按可辅导年级搜索…")) { gradeSearch.setText(""); gradeSearch.setForeground(UITheme.TEXT_MAIN); }
+            }
+            public void focusLost(java.awt.event.FocusEvent e) {
+                if (gradeSearch.getText().isEmpty()) { gradeSearch.setText("按可辅导年级搜索…"); gradeSearch.setForeground(UITheme.TEXT_LIGHT); }
+            }
+        });
+
+        JTextField priceSearch = UITheme.roundedField("");
+        priceSearch.setPreferredSize(new Dimension(160, 34));
+        priceSearch.setToolTipText("输入最高价格，筛选 ≤ 该值的学生，如：100");
+        priceSearch.setText("价格上限（如：100）…");
+        priceSearch.setForeground(UITheme.TEXT_LIGHT);
+        priceSearch.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent e) {
+                if (priceSearch.getText().equals("价格上限（如：100）…")) { priceSearch.setText(""); priceSearch.setForeground(UITheme.TEXT_MAIN); }
+            }
+            public void focusLost(java.awt.event.FocusEvent e) {
+                if (priceSearch.getText().isEmpty()) { priceSearch.setText("价格上限（如：100）…"); priceSearch.setForeground(UITheme.TEXT_LIGHT); }
+            }
+        });
+
+        JButton searchBtn = UITheme.primaryButton("🔍 搜索");
+        searchBtn.setPreferredSize(new Dimension(90, 34));
+        JButton resetBtn  = UITheme.secondaryButton("重置");
+        resetBtn.setPreferredSize(new Dimension(70, 34));
+
+        JLabel hintLbl = new JLabel("  年级：模糊匹配；价格：输入数字，展示 ≤ 该值的所有学生");
+        hintLbl.setFont(UITheme.FONT_SMALL); hintLbl.setForeground(UITheme.TEXT_LIGHT);
+
+        searchBar.add(gradeSearch); searchBar.add(priceSearch);
+        searchBar.add(searchBtn);   searchBar.add(resetBtn);
+        searchBar.add(hintLbl);
+
+        // ── 结果区（动态刷新） ──────────────────────────────
+        JPanel resultHolder = new JPanel(new BorderLayout());
+        resultHolder.setOpaque(false);
+
+        Runnable refreshGrid = () -> {
+            String gKw = gradeSearch.getText().equals("按可辅导年级搜索…") ? "" : gradeSearch.getText().trim().toLowerCase();
+            String pRaw = priceSearch.getText().equals("价格上限（如：100）…") ? "" : priceSearch.getText().trim();
+            int priceMax = Integer.MAX_VALUE;
+            if (!pRaw.isEmpty()) {
+                try { priceMax = Integer.parseInt(pRaw.replaceAll("[^0-9]", "")); }
+                catch (NumberFormatException ignored) {}
+            }
+            final int maxVal = priceMax;
+            List<Student> filtered = allVisible.stream()
+                    .filter(s -> gKw.isEmpty() || (s.getTargetGrages() != null && s.getTargetGrages().toLowerCase().contains(gKw)))
+                    .filter(s -> {
+                        if (maxVal == Integer.MAX_VALUE) return true;
+                        if (s.getPrice() == null) return false;
+                        try {
+                            int val = Integer.parseInt(s.getPrice().replaceAll("[^0-9]", ""));
+                            return val <= maxVal;
+                        } catch (NumberFormatException e) { return false; }
+                    })
+                    .toList();
+            resultHolder.removeAll();
+            if (filtered.isEmpty()) {
+                resultHolder.add(emptyHint("没有符合条件的学生，请调整搜索条件"), BorderLayout.CENTER);
+            } else {
+                JPanel grid = new JPanel(new GridLayout(0, 2, 16, 16));
+                grid.setOpaque(false);
+                for (Student s : filtered) grid.add(buildStudentCard(s));
+                resultHolder.add(scrollPane(grid), BorderLayout.CENTER);
+            }
+            resultHolder.revalidate(); resultHolder.repaint();
+        };
+
+        searchBtn.addActionListener(e -> refreshGrid.run());
+        resetBtn.addActionListener(e -> {
+            gradeSearch.setText("按可辅导年级搜索…"); gradeSearch.setForeground(UITheme.TEXT_LIGHT);
+            priceSearch.setText("价格上限（如：100）…"); priceSearch.setForeground(UITheme.TEXT_LIGHT);
+            refreshGrid.run();
+        });
+        gradeSearch.addActionListener(e -> refreshGrid.run());
+        priceSearch.addActionListener(e -> refreshGrid.run());
+
+        if (allVisible.isEmpty()) {
+            resultHolder.add(emptyHint("暂无通过审核的学生展示"), BorderLayout.CENTER);
+        } else {
+            refreshGrid.run();
+        }
+
+        JPanel northPanel = new JPanel(new BorderLayout());
+        northPanel.setOpaque(false);
+        Component titleBar = root.getComponent(0);
+        root.remove(titleBar);
+        northPanel.add(titleBar, BorderLayout.NORTH);
+        northPanel.add(searchBar, BorderLayout.SOUTH);
+        root.add(northPanel, BorderLayout.NORTH);
+        root.add(resultHolder, BorderLayout.CENTER);
         return root;
     }
+
+    /**
+     * 搜索结果面板：按关键词匹配学生（姓名/学校/科目）和家长（姓名/用户名）
+     */
+    public static JPanel buildSearchResultPanel(String keyword, User currentUser) {
+        String kw = keyword.toLowerCase();
+        JPanel root = pageRoot("🔍  搜索结果：「" + keyword + "」");
+
+        // 搜索已通过审核的学生
+        List<Student> students = userDao.readAll().stream()
+                .filter(u -> u instanceof Student).map(u -> (Student) u)
+                .filter(s -> s.isVisible() && s.getAccept() == 1)
+                .filter(s -> matchKw(kw, s.getName(), s.getSchool(), s.getMaior(),
+                        s.getSubject(), s.getTargetGrages(), s.getAdvantage()))
+                .toList();
+
+        // 搜索家长（用户名/姓名）
+        List<User> parents = userDao.readAll().stream()
+                .filter(u -> u.getRole().equals("Parent"))
+                .filter(u -> matchKw(kw, u.getName(), u.getUsername(), u.getPhone()))
+                .toList();
+
+        if (students.isEmpty() && parents.isEmpty()) {
+            root.add(emptyHint("未找到与「" + keyword + "」相关的用户"), BorderLayout.CENTER);
+            return root;
+        }
+
+        JPanel resultPanel = new JPanel();
+        resultPanel.setLayout(new BoxLayout(resultPanel, BoxLayout.Y_AXIS));
+        resultPanel.setOpaque(false);
+
+        if (!students.isEmpty()) {
+            JLabel sectionLbl = new JLabel("  👨‍🎓 匹配的学生家教（" + students.size() + " 位）");
+            sectionLbl.setFont(UITheme.FONT_H2); sectionLbl.setForeground(UITheme.TEXT_SUB);
+            sectionLbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+            sectionLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+            resultPanel.add(sectionLbl);
+            JPanel grid = new JPanel(new GridLayout(0, 2, 16, 16));
+            grid.setOpaque(false);
+            grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+            for (Student s : students) grid.add(buildStudentCard(s));
+            resultPanel.add(grid);
+            resultPanel.add(Box.createVerticalStrut(20));
+        }
+
+        if (!parents.isEmpty()) {
+            JLabel sectionLbl = new JLabel("  👨‍👩‍👧 匹配的家长（" + parents.size() + " 位）");
+            sectionLbl.setFont(UITheme.FONT_H2); sectionLbl.setForeground(UITheme.TEXT_SUB);
+            sectionLbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+            sectionLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+            resultPanel.add(sectionLbl);
+            JPanel grid = new JPanel(new GridLayout(0, 2, 16, 16));
+            grid.setOpaque(false);
+            grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+            for (User p : parents) {
+                JPanel card = UITheme.card();
+                card.setLayout(new GridBagLayout());
+                GridBagConstraints gbc2 = new GridBagConstraints();
+                gbc2.gridx = 0; gbc2.gridy = GridBagConstraints.RELATIVE;
+                gbc2.fill = GridBagConstraints.HORIZONTAL; gbc2.weightx = 1;
+                gbc2.insets = new Insets(3, 0, 3, 0);
+                JLabel name = new JLabel("👨‍👩‍👧 " + (p.getName() != null ? p.getName() : p.getUsername()));
+                name.setFont(UITheme.FONT_H3); name.setForeground(UITheme.TEXT_MAIN);
+                card.add(name, gbc2);
+                card.add(infoRow("用户名", p.getUsername()), gbc2);
+                card.add(infoRow("手机号", p.getPhone() != null ? p.getPhone() : "-"), gbc2);
+                grid.add(card);
+            }
+            resultPanel.add(grid);
+        }
+
+        root.add(scrollPane(resultPanel), BorderLayout.CENTER);
+        return root;
+    }
+
+    /** 多字段关键词匹配辅助 */
+    private static boolean matchKw(String kw, String... fields) {
+        for (String f : fields) {
+            if (f != null && f.toLowerCase().contains(kw)) return true;
+        }
+        return false;
+    }
+
 
     private static JPanel buildStudentCard(Student s) {
         JPanel card = UITheme.card();
@@ -242,8 +911,33 @@ public class MainMenu {
         card.add(infoRow("辅导年级", s.getTargetGrages() != null ? s.getTargetGrages() : "-"), gbc);
         card.add(infoRow("收费标准", s.getPrice() != null ? s.getPrice() : "-"), gbc);
         card.add(infoRow("辅导方式", s.getWay() != null ? s.getWay() : "-"), gbc);
-        if (s.getAdvantage() != null && !s.getAdvantage().isEmpty())
-            card.add(infoRow("个人优势", s.getAdvantage()), gbc);
+        // 只展示优势文本（不含URL/验证码）
+        String advTxt = advText(s.getAdvantage());
+        if (advTxt != null && !advTxt.isEmpty())
+            card.add(infoRow("个人优势", advTxt), gbc);
+        // 学历查验网址（供家长点击核验）
+        String reportUrl = advReportUrl(s.getAdvantage());
+        if (reportUrl != null && !reportUrl.isEmpty()) {
+            String verifyCode = advVerifyCode(s.getAdvantage());
+            JLabel verifyLbl = new JLabel("  🎓 已提供学历查验 — 点击核验");
+            verifyLbl.setFont(UITheme.FONT_SMALL);
+            verifyLbl.setForeground(UITheme.PRIMARY);
+            verifyLbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            verifyLbl.addMouseListener(new MouseAdapter() {
+                @Override public void mouseClicked(MouseEvent e) {
+                    String msg = "学历在线查验网址：\n" + reportUrl
+                            + (verifyCode.isEmpty() ? "" : "\n\n验证码：" + verifyCode);
+                    int choice = JOptionPane.showOptionDialog(card, msg, "学历核验",
+                            JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE, null,
+                            new String[]{"打开网址", "关闭"}, "打开网址");
+                    if (choice == 0) {
+                        try { java.awt.Desktop.getDesktop().browse(new java.net.URI(reportUrl)); }
+                        catch (Exception ex) { UITheme.showError(card, "无法打开浏览器：" + ex.getMessage()); }
+                    }
+                }
+            });
+            card.add(verifyLbl, gbc);
+        }
         return card;
     }
 
@@ -278,35 +972,79 @@ public class MainMenu {
         return card;
     }
 
+    /** 判断账户是否已被禁用（密码以 !DISABLED! 开头） */
+    private static boolean isDisabled(User u) {
+        return u.getPassword() != null && u.getPassword().startsWith("!DISABLED!");
+    }
+
     public static JPanel buildUserManagePanel() {
         JPanel root = pageRoot("👥  用户管理");
         List<User> list = userDao.readAll();
-        String[] cols = {"用户名", "姓名", "角色", "手机号", "操作"};
+        String[] cols = {"用户名", "姓名", "角色", "手机号", "状态", "操作"};
         Object[][] data = new Object[list.size()][cols.length];
         for (int i = 0; i < list.size(); i++) {
             User u = list.get(i);
-            data[i] = new Object[]{u.getUsername(), u.getName(), u.getRole(), u.getPhone(), "删除"};
+            boolean dis = isDisabled(u);
+            data[i] = new Object[]{u.getUsername(), u.getName(), u.getRole(), u.getPhone(),
+                    dis ? "🔴 已禁用" : "🟢 正常",
+                    dis ? "启用" : "禁用"};
         }
         DefaultTableModel model = new DefaultTableModel(data, cols) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         JTable table = styledTable(null, null);
         table.setModel(model);
-        int opCol = table.getColumnModel().getColumnIndex("操作");
-        table.getColumnModel().getColumn(opCol).setCellRenderer(new BtnRenderer("删除", UITheme.DANGER));
+        final int opCol = table.getColumnModel().getColumnIndex("操作");
+        // 动态渲染：禁用账户显示绿色"启用"，正常账户显示橙色"禁用"
+        table.getColumnModel().getColumn(opCol).setCellRenderer((t, val, sel, focus, row, col) -> {
+            boolean dis = isDisabled(list.get(row));
+            JButton btn = new JButton(dis ? "启用" : "禁用") {
+                @Override protected void paintComponent(Graphics g) {
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(dis ? UITheme.SUCCESS : UITheme.WARNING);
+                    g2.fillRoundRect(4, 4, getWidth()-8, getHeight()-8, 8, 8);
+                    g2.dispose(); super.paintComponent(g);
+                }
+            };
+            btn.setFont(UITheme.font(Font.BOLD, 12));
+            btn.setForeground(Color.WHITE);
+            btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
+            return btn;
+        });
         table.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 int row = table.rowAtPoint(e.getPoint());
                 int col = table.columnAtPoint(e.getPoint());
                 if (row < 0 || col != opCol) return;
                 User target = list.get(row);
-                int ch = JOptionPane.showConfirmDialog(root,
-                        "确定删除用户「" + target.getName() + "」？", "确认删除", JOptionPane.YES_NO_OPTION);
-                if (ch == JOptionPane.YES_OPTION) {
-                    userDao.del(u -> u.getUsername().equals(target.getUsername()));
-                    UITheme.showSuccess(root, "已删除用户");
-                    rebuildPanel(root, buildUserManagePanel());
+                boolean dis = isDisabled(target);
+                if (dis) {
+                    // 启用：去掉 !DISABLED! 前缀
+                    target.setPassword(target.getPassword().substring("!DISABLED!".length()));
+                    // 若是学生且原先通过审核，恢复可见
+                    if (target instanceof Student s && s.getAccept() == 1) s.setVisible(true);
+                    userDao.update(u -> u.getUsername().equals(target.getUsername()), target);
+                    UITheme.showSuccess(root, "已启用账户「" + target.getName() + "」");
+                } else {
+                    int ch = JOptionPane.showConfirmDialog(root,
+                            "确定禁用「" + target.getName() + "」？\n该用户将无法登录，相关信息将下架（数据保留）。",
+                            "确认禁用", JOptionPane.YES_NO_OPTION);
+                    if (ch != JOptionPane.YES_OPTION) return;
+                    // 禁用：密码前加 !DISABLED! 前缀
+                    target.setPassword("!DISABLED!" + target.getPassword());
+                    // 下架学生信息
+                    if (target instanceof Student s) s.setVisible(false);
+                    userDao.update(u -> u.getUsername().equals(target.getUsername()), target);
+                    // 下架该用户的所有未关闭需求（家长）
+                    requireDao.findLits(r -> r.getParentUsername().equals(target.getUsername()) && !r.isClosed())
+                            .forEach(r -> {
+                                r.setClosed(true);
+                                requireDao.update(req -> req.getReqID().equals(r.getReqID()), r);
+                            });
+                    UITheme.showSuccess(root, "已禁用账户「" + target.getName() + "」，相关信息已下架");
                 }
+                rebuildPanel(root, buildUserManagePanel());
             }
         });
         table.addMouseMotionListener(new MouseMotionAdapter() {
@@ -525,6 +1263,14 @@ public class MainMenu {
         val.setFont(UITheme.FONT_LABEL); val.setForeground(UITheme.TEXT_MAIN);
         row.add(lbl, BorderLayout.WEST); row.add(val, BorderLayout.CENTER);
         return row;
+    }
+
+    /** 分区分隔标签 */
+    private static JLabel sectionSep(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setFont(UITheme.font(Font.BOLD, 12));
+        lbl.setForeground(UITheme.TEXT_LIGHT);
+        return lbl;
     }
 
     private static JLabel badge(String text, Color color) {
