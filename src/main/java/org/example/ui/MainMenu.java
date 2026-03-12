@@ -158,6 +158,7 @@ public class MainMenu {
         JTextField subjectField   = UITheme.roundedField("可辅导的学科，如：数学、英语");
         JTextField gradeField2    = UITheme.roundedField("可辅导的年级段，如：小学、初中");
         JTextField advantageField = UITheme.roundedField("获奖经历、擅长科目等");
+        JTextField addressField   = UITheme.roundedField("可辅导的地址，如：海淀区、朝阳区");
         JSpinner expSpinner = new JSpinner(new SpinnerNumberModel(student.getExperience(), 0, 20, 1));
 
         // ── 辅导方式复选框 + 分价格 ──────────────────────────
@@ -187,6 +188,7 @@ public class MainMenu {
         }
         if (student.getSubject()      != null) subjectField.setText(student.getSubject());
         if (student.getTargetGrages() != null) gradeField2.setText(student.getTargetGrages());
+        if (student.getaddress() != null) addressField.setText(student.getaddress());
         // advantage 字段只显示纯文本部分（URL/验证码在下方专区）
         advantageField.setText(advText(student.getAdvantage()));
 
@@ -211,6 +213,7 @@ public class MainMenu {
         card.add(UITheme.formRow("线上价格", onlinePriceField), gbc);
         card.add(UITheme.formRow("家教经验(年)", expSpinner), gbc);
         card.add(UITheme.formRow("个人优势", advantageField), gbc);
+        card.add(UITheme.formRow("辅导地址", addressField), gbc);
 
         // ── 学历在线验证专区（新增）──────────────────────────
         card.add(sectionSep("── 学历在线验证（供家长核验）──"), gbc);
@@ -252,11 +255,16 @@ public class MainMenu {
                 wayBuilder.append("线上:").append(p);
             }
             StringBuilder priceDisplay = new StringBuilder();
-            if (offlineCheck.isSelected()) priceDisplay.append("线下").append(offlinePriceField.getText().trim());
-            if (onlineCheck.isSelected()) {
-                if (priceDisplay.length() > 0) priceDisplay.append(" / ");
-                priceDisplay.append("线上").append(onlinePriceField.getText().trim());
-            }
+            int offlinePrice = Integer.MAX_VALUE;
+            int onlinePrice = Integer.MAX_VALUE;
+            offlinePrice = parsePrice(offlinePriceField.getText());
+            onlinePrice  = parsePrice(onlinePriceField.getText());
+
+// 取最小值
+            int minPrice = Math.min(offlinePrice, onlinePrice);
+
+// 保存最小价格
+            student.setPrice(minPrice == Integer.MAX_VALUE ? "" : String.valueOf(minPrice));
             // 将优势文本 + 查验网址 + 验证码合并编码存入 advantage 字段
             String newAdv = buildAdv(
                     advantageField.getText().trim(),
@@ -264,9 +272,9 @@ public class MainMenu {
                     verifyCodeField.getText().trim());
             student.setSubject(subjectField.getText().trim());
             student.setTargetGrages(gradeField2.getText().trim());
-            student.setPrice(priceDisplay.toString());
             student.setWay(wayBuilder.toString());
             student.setAdvantage(newAdv);
+            student.setaddress(addressField.getText().trim());
             student.setExperience((Integer) expSpinner.getValue());
             student.setVisible(student.getAccept() == 1 && !Validator.isEmpty(student.getSubject()));
             // 调用 BaseDao.update(Predicate, item) 持久化到 users.json
@@ -439,7 +447,6 @@ public class MainMenu {
         JTextField gradeSearch = UITheme.roundedField("");
         gradeSearch.setPreferredSize(new Dimension(160, 34));
         gradeSearch.setToolTipText("按年级搜索，如：小学、初中、高中");
-        // 占位提示
         gradeSearch.setText("按年级搜索…");
         gradeSearch.setForeground(UITheme.TEXT_LIGHT);
         gradeSearch.addFocusListener(new java.awt.event.FocusAdapter() {
@@ -448,6 +455,21 @@ public class MainMenu {
             }
             public void focusLost(java.awt.event.FocusEvent e) {
                 if (gradeSearch.getText().isEmpty()) { gradeSearch.setText("按年级搜索…"); gradeSearch.setForeground(UITheme.TEXT_LIGHT); }
+            }
+        });
+
+        // ✨ 新增：地址搜索框
+        JTextField addressSearch = UITheme.roundedField("");
+        addressSearch.setPreferredSize(new Dimension(160, 34));
+        addressSearch.setToolTipText("按地址搜索，如：海淀区、朝阳区");
+        addressSearch.setText("按地址搜索…");
+        addressSearch.setForeground(UITheme.TEXT_LIGHT);
+        addressSearch.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent e) {
+                if (addressSearch.getText().equals("按地址搜索…")) { addressSearch.setText(""); addressSearch.setForeground(UITheme.TEXT_MAIN); }
+            }
+            public void focusLost(java.awt.event.FocusEvent e) {
+                if (addressSearch.getText().isEmpty()) { addressSearch.setText("按地址搜索…"); addressSearch.setForeground(UITheme.TEXT_LIGHT); }
             }
         });
 
@@ -470,11 +492,16 @@ public class MainMenu {
         JButton resetBtn  = UITheme.secondaryButton("重置");
         resetBtn.setPreferredSize(new Dimension(70, 34));
 
-        JLabel hintLbl = new JLabel("  年级：模糊匹配；薪酬：输入数字，展示 ≤ 该值的所有需求");
+        // ✨ 修改提示文本
+        JLabel hintLbl = new JLabel("  年级/地址：模糊匹配；薪酬：输入数字，展示 ≤ 该值的所有需求");
         hintLbl.setFont(UITheme.FONT_SMALL); hintLbl.setForeground(UITheme.TEXT_LIGHT);
 
-        searchBar.add(gradeSearch); searchBar.add(priceSearch);
-        searchBar.add(searchBtn);   searchBar.add(resetBtn);
+        // ✨ 添加地址搜索框到搜索栏
+        searchBar.add(gradeSearch);
+        searchBar.add(addressSearch);  // ← 新增
+        searchBar.add(priceSearch);
+        searchBar.add(searchBtn);
+        searchBar.add(resetBtn);
         searchBar.add(hintLbl);
 
         // ── 表格区（可动态刷新） ────────────────────────────
@@ -484,7 +511,10 @@ public class MainMenu {
 
         Runnable refreshTable = () -> {
             String gKw = gradeSearch.getText().equals("按年级搜索…") ? "" : gradeSearch.getText().trim().toLowerCase();
+            // ✨ 新增：获取地址关键词
+            String aKw = addressSearch.getText().equals("按地址搜索…") ? "" : addressSearch.getText().trim().toLowerCase();
             String pRaw = priceSearch.getText().equals("薪酬上限（如：150）…") ? "" : priceSearch.getText().trim();
+
             // 解析价格上限
             int priceMax = Integer.MAX_VALUE;
             if (!pRaw.isEmpty()) {
@@ -492,8 +522,11 @@ public class MainMenu {
                 catch (NumberFormatException ignored) {}
             }
             final int maxVal = priceMax;
+
             List<TutorRequirement> filtered = allList.stream()
                     .filter(r -> gKw.isEmpty() || (r.getGradeLevel() != null && r.getGradeLevel().toLowerCase().contains(gKw)))
+                    // ✨ 新增：按地址过滤
+                    .filter(r -> aKw.isEmpty() || (r.getAddress() != null && r.getAddress().toLowerCase().contains(aKw)))
                     .filter(r -> {
                         if (maxVal == Integer.MAX_VALUE) return true;
                         if (r.getMoney() == null) return false;
@@ -503,6 +536,7 @@ public class MainMenu {
                         } catch (NumberFormatException e) { return false; }
                     })
                     .toList();
+
             tableHolder.removeAll();
             if (filtered.isEmpty()) {
                 tableHolder.add(emptyHint("没有符合条件的需求，请调整搜索条件"), BorderLayout.CENTER);
@@ -525,11 +559,14 @@ public class MainMenu {
         searchBtn.addActionListener(e -> refreshTable.run());
         resetBtn.addActionListener(e -> {
             gradeSearch.setText("按年级搜索…"); gradeSearch.setForeground(UITheme.TEXT_LIGHT);
+            addressSearch.setText("按地址搜索…"); addressSearch.setForeground(UITheme.TEXT_LIGHT);  // ← 新增
             priceSearch.setText("薪酬上限（如：150）…"); priceSearch.setForeground(UITheme.TEXT_LIGHT);
             refreshTable.run();
         });
-        // 支持回车触发搜索
+
+        // ✨ 支持回车触发搜索
         gradeSearch.addActionListener(e -> refreshTable.run());
+        addressSearch.addActionListener(e -> refreshTable.run());  // ← 新增
         priceSearch.addActionListener(e -> refreshTable.run());
 
         if (allList.isEmpty()) {
@@ -541,7 +578,6 @@ public class MainMenu {
         // 把搜索栏加到 pageRoot 的 NORTH 下方
         JPanel northPanel = new JPanel(new BorderLayout());
         northPanel.setOpaque(false);
-        // 取出原有 titleBar 放入 northPanel 顶部
         Component titleBar = root.getComponent(0);
         root.remove(titleBar);
         northPanel.add(titleBar, BorderLayout.NORTH);
@@ -570,10 +606,6 @@ public class MainMenu {
 
         JTextField nameField  = UITheme.roundedField("真实姓名");
         JTextField phoneField = UITheme.roundedField("手机号");
-        JPasswordField pwdField    = UITheme.roundedPasswordField();
-        JPasswordField pwdConfirm  = UITheme.roundedPasswordField();
-        pwdField.setToolTipText("留空则不修改密码");
-        pwdConfirm.setToolTipText("再次输入新密码");
 
         if (currentUser.getName()  != null) nameField.setText(currentUser.getName());
         if (currentUser.getPhone() != null) phoneField.setText(currentUser.getPhone());
@@ -581,11 +613,10 @@ public class MainMenu {
         card.add(UITheme.formRow("姓　　名", nameField), gbc);
         card.add(UITheme.formRow("手　机　号", phoneField), gbc);
 
-        JLabel pwdHint = new JLabel("── 修改密码（留空不修改）──");
-        pwdHint.setFont(UITheme.font(Font.BOLD, 12)); pwdHint.setForeground(UITheme.TEXT_LIGHT);
-        card.add(pwdHint, gbc);
-        card.add(UITheme.formRow("新密码", pwdField), gbc);
-        card.add(UITheme.formRow("确认新密码", pwdConfirm), gbc);
+        // 提示密码修改入口
+        JLabel pwdHintLbl = new JLabel("  🔒 如需修改密码，请点击左侧「账号设置」");
+        pwdHintLbl.setFont(UITheme.FONT_SMALL); pwdHintLbl.setForeground(UITheme.TEXT_LIGHT);
+        card.add(pwdHintLbl, gbc);
 
         JButton saveBtn = UITheme.primaryButton("保存修改");
         saveBtn.setPreferredSize(new Dimension(140, 38));
@@ -594,14 +625,10 @@ public class MainMenu {
         saveBtn.addActionListener(e -> {
             String name  = nameField.getText().trim();
             String phone = phoneField.getText().trim();
-            String pwd   = new String(pwdField.getPassword()).trim();
-            String pwd2  = new String(pwdConfirm.getPassword()).trim();
             if (Validator.isEmpty(name))  { UITheme.showError(saveBtn, "姓名不能为空！"); return; }
             if (Validator.isEmpty(phone)) { UITheme.showError(saveBtn, "手机号不能为空！"); return; }
-            if (!pwd.isEmpty() && !pwd.equals(pwd2)) { UITheme.showError(saveBtn, "两次密码输入不一致！"); return; }
             currentUser.setName(name);
             currentUser.setPhone(phone);
-            if (!pwd.isEmpty()) currentUser.setPassword(pwd);
             userDao.update(u -> u.getUsername().equals(currentUser.getUsername()), currentUser);
             UserService.currentUser = currentUser;
             UITheme.showSuccess(saveBtn, "信息修改成功！");
@@ -746,8 +773,27 @@ public class MainMenu {
 
         JLabel hintLbl = new JLabel("  年级：模糊匹配；价格：输入数字，展示 ≤ 该值的所有学生");
         hintLbl.setFont(UITheme.FONT_SMALL); hintLbl.setForeground(UITheme.TEXT_LIGHT);
-
+        JTextField addressSearch = UITheme.roundedField("");
+        addressSearch.setPreferredSize(new Dimension(160, 34));
+        addressSearch.setToolTipText("按辅导地址搜索，如：海淀区、朝阳区");
+        addressSearch.setText("按辅导地址搜索…");
+        addressSearch.setForeground(UITheme.TEXT_LIGHT);
+        addressSearch.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent e) {
+                if (addressSearch.getText().equals("按辅导地址搜索…")) {
+                    addressSearch.setText("");
+                    addressSearch.setForeground(UITheme.TEXT_MAIN);
+                }
+            }
+            public void focusLost(java.awt.event.FocusEvent e) {
+                if (addressSearch.getText().isEmpty()) {
+                    addressSearch.setText("按辅导地址搜索…");
+                    addressSearch.setForeground(UITheme.TEXT_LIGHT);
+                }
+            }
+        });
         searchBar.add(gradeSearch); searchBar.add(priceSearch);
+        searchBar.add(addressSearch);
         searchBar.add(searchBtn);   searchBar.add(resetBtn);
         searchBar.add(hintLbl);
 
@@ -756,45 +802,88 @@ public class MainMenu {
         resultHolder.setOpaque(false);
 
         Runnable refreshGrid = () -> {
-            String gKw = gradeSearch.getText().equals("按可辅导年级搜索…") ? "" : gradeSearch.getText().trim().toLowerCase();
-            String pRaw = priceSearch.getText().equals("价格上限（如：100）…") ? "" : priceSearch.getText().trim();
+
+            String gKw = gradeSearch.getText().equals("按可辅导年级搜索…")
+                    ? "" : gradeSearch.getText().trim().toLowerCase();
+
+            String aKw = addressSearch.getText().equals("按辅导地址搜索…")
+                    ? "" : addressSearch.getText().trim().toLowerCase();
+
+            String pRaw = priceSearch.getText().equals("价格上限（如：100）…")
+                    ? "" : priceSearch.getText().trim();
+
             int priceMax = Integer.MAX_VALUE;
+
             if (!pRaw.isEmpty()) {
-                try { priceMax = Integer.parseInt(pRaw.replaceAll("[^0-9]", "")); }
-                catch (NumberFormatException ignored) {}
+                try {
+                    priceMax = Integer.parseInt(pRaw.replaceAll("[^0-9]", ""));
+                } catch (NumberFormatException ignored) {}
             }
+
             final int maxVal = priceMax;
+
             List<Student> filtered = allVisible.stream()
-                    .filter(s -> gKw.isEmpty() || (s.getTargetGrages() != null && s.getTargetGrages().toLowerCase().contains(gKw)))
+
+                    // 年级过滤
+                    .filter(s ->
+                            gKw.isEmpty() ||
+                                    (s.getTargetGrages() != null &&
+                                            s.getTargetGrages().toLowerCase().contains(gKw))
+                    )
+
+                    // 地址过滤
+                    .filter(s ->
+                            aKw.isEmpty() ||
+                                    (s.getaddress() != null &&
+                                            s.getaddress().toLowerCase().contains(aKw))
+                    )
+
+                    // 价格过滤
                     .filter(s -> {
                         if (maxVal == Integer.MAX_VALUE) return true;
+
                         if (s.getPrice() == null) return false;
+
                         try {
                             int val = Integer.parseInt(s.getPrice().replaceAll("[^0-9]", ""));
                             return val <= maxVal;
-                        } catch (NumberFormatException e) { return false; }
+                        } catch (NumberFormatException e) {
+                            return false;
+                        }
                     })
+
                     .toList();
+
             resultHolder.removeAll();
+
             if (filtered.isEmpty()) {
                 resultHolder.add(emptyHint("没有符合条件的学生，请调整搜索条件"), BorderLayout.CENTER);
             } else {
+
                 JPanel grid = new JPanel(new GridLayout(0, 2, 16, 16));
                 grid.setOpaque(false);
-                for (Student s : filtered) grid.add(buildStudentCard(s));
+
+                for (Student s : filtered) {
+                    grid.add(buildStudentCard(s));
+                }
+
                 resultHolder.add(scrollPane(grid), BorderLayout.CENTER);
             }
-            resultHolder.revalidate(); resultHolder.repaint();
+
+            resultHolder.revalidate();
+            resultHolder.repaint();
         };
 
         searchBtn.addActionListener(e -> refreshGrid.run());
         resetBtn.addActionListener(e -> {
             gradeSearch.setText("按可辅导年级搜索…"); gradeSearch.setForeground(UITheme.TEXT_LIGHT);
+            addressSearch.setText("按辅导地址搜索…"); addressSearch.setForeground(UITheme.TEXT_LIGHT);
             priceSearch.setText("价格上限（如：100）…"); priceSearch.setForeground(UITheme.TEXT_LIGHT);
             refreshGrid.run();
         });
         gradeSearch.addActionListener(e -> refreshGrid.run());
         priceSearch.addActionListener(e -> refreshGrid.run());
+        addressSearch.addActionListener(e -> refreshGrid.run());
 
         if (allVisible.isEmpty()) {
             resultHolder.add(emptyHint("暂无通过审核的学生展示"), BorderLayout.CENTER);
@@ -911,6 +1000,9 @@ public class MainMenu {
         card.add(infoRow("辅导年级", s.getTargetGrages() != null ? s.getTargetGrages() : "-"), gbc);
         card.add(infoRow("收费标准", s.getPrice() != null ? s.getPrice() : "-"), gbc);
         card.add(infoRow("辅导方式", s.getWay() != null ? s.getWay() : "-"), gbc);
+        card.add(infoRow("辅导地址", s.getaddress() != null ? s.getaddress() : "-"), gbc);
+
+        card.add(infoRow("联系电话", s.getPhone() != null ? s.getPhone() : "-"), gbc);
         // 只展示优势文本（不含URL/验证码）
         String advTxt = advText(s.getAdvantage());
         if (advTxt != null && !advTxt.isEmpty())
@@ -1331,7 +1423,12 @@ public class MainMenu {
         @Override public Component getTableCellRendererComponent(JTable t, Object val,
                                                                  boolean sel, boolean focus, int row, int col) { return btn; }
     }
+    private static int parsePrice(String p){
+        if(p == null) return Integer.MAX_VALUE;
+        try{
+            return Integer.parseInt(p.replaceAll("[^0-9]", ""));
+        }catch(Exception e){
+            return Integer.MAX_VALUE;
+        }
+    }
 }
-/*、
-
- */

@@ -30,7 +30,7 @@ public class DashboardView extends JFrame {
         this.currentUser = user;
         UITheme.applyGlobalFont();
 
-        setTitle("家教匹配系统");
+        setTitle("大学生家教服务系统");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(1100, 680);
         setLocationRelativeTo(null);
@@ -105,26 +105,26 @@ public class DashboardView extends JFrame {
         String role = currentUser.getRole();
         switch (role) {
             case "Student" -> {
-                navItems.add(new NavItem("📋", "家教需求", () -> showPanel(MainMenu.buildRequirementListPanel(currentUser))));
-                navItems.add(new NavItem("👤", "我的信息", () -> showPanel(MainMenu.buildStudentProfilePanel((Student) currentUser))));
-                navItems.add(new NavItem("📣", "系统公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
-                navItems.add(new NavItem("🔑", "账号设置", () -> showPanel(MainMenu.buildAccountSettingsPanel(currentUser))));
+                navItems.add(new NavItem("1.", "家教需求", () -> showPanel(MainMenu.buildRequirementListPanel(currentUser))));
+                navItems.add(new NavItem("2.", "我的信息", () -> showPanel(MainMenu.buildStudentProfilePanel((Student) currentUser))));
+                navItems.add(new NavItem("3.", "系统公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
+                navItems.add(new NavItem("4.", "账号设置", () -> showPanel(MainMenu.buildAccountSettingsPanel(currentUser))));
             }
             case "Parent" -> {
-                navItems.add(new NavItem("🔍", "浏览学生", () -> showPanel(MainMenu.buildBrowseStudentsPanel())));
-                navItems.add(new NavItem("➕", "发布需求", () -> showPanel(MainMenu.buildPostRequirementPanel(currentUser))));
-                navItems.add(new NavItem("📋", "我的需求", () -> showPanel(MainMenu.buildMyRequirementPanel(currentUser))));
-                navItems.add(new NavItem("👤", "我的信息", () -> showPanel(MainMenu.buildParentEditPanel(currentUser))));
-                navItems.add(new NavItem("📣", "系统公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
-                navItems.add(new NavItem("🔑", "账号设置", () -> showPanel(MainMenu.buildAccountSettingsPanel(currentUser))));
+                navItems.add(new NavItem("1.", "浏览学生", () -> showPanel(MainMenu.buildBrowseStudentsPanel())));
+                navItems.add(new NavItem("2.", "发布需求", () -> showPanel(MainMenu.buildPostRequirementPanel(currentUser))));
+                navItems.add(new NavItem("3.", "我的需求", () -> showPanel(MainMenu.buildMyRequirementPanel(currentUser))));
+                navItems.add(new NavItem("4.", "我的信息", () -> showPanel(MainMenu.buildParentEditPanel(currentUser))));
+                navItems.add(new NavItem("5.", "系统公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
+                navItems.add(new NavItem("6.", "账号设置", () -> showPanel(MainMenu.buildAccountSettingsPanel(currentUser))));
             }
             case "Admin" -> {
-                navItems.add(new NavItem("🏠", "系统概况", () -> showPanel(MainMenu.buildAdminOverviewPanel())));
-                navItems.add(new NavItem("👥", "用户管理", () -> showPanel(MainMenu.buildUserManagePanel())));
-                navItems.add(new NavItem("📣", "发布公告", () -> showPanel(MainMenu.buildPublishAnnouncementPanel())));
-                navItems.add(new NavItem("📋", "需求管理", () -> showPanel(MainMenu.buildAllRequirementsPanel())));
-                navItems.add(new NavItem("✅", "审核学生", () -> showPanel(MainMenu.buildStudentAuditPanel())));
-                navItems.add(new NavItem("🔔", "查看公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
+                navItems.add(new NavItem("1.", "系统概况", () -> showPanel(MainMenu.buildAdminOverviewPanel())));
+                navItems.add(new NavItem("2.", "用户管理", () -> showPanel(MainMenu.buildUserManagePanel())));
+                navItems.add(new NavItem("3.", "发布公告", () -> showPanel(MainMenu.buildPublishAnnouncementPanel())));
+                navItems.add(new NavItem("4.", "需求管理", () -> showPanel(MainMenu.buildAllRequirementsPanel())));
+                navItems.add(new NavItem("5.", "审核学生", () -> showPanel(MainMenu.buildStudentAuditPanel())));
+                navItems.add(new NavItem("6.", "查看公告", () -> showPanel(MainMenu.buildAnnouncementPanel())));
             }
             default -> {
                 navItems.add(new NavItem("🏠", "首页", () -> showPanel(MainMenu.buildAnnouncementPanel())));
@@ -176,7 +176,7 @@ public class DashboardView extends JFrame {
         info.add(roleLabel);
 
         // 退出按钮
-        JButton logoutBtn = new JButton("⬅");
+        JButton logoutBtn = new JButton("<");
         logoutBtn.setFont(UITheme.font(Font.PLAIN, 16));
         logoutBtn.setForeground(new Color(255, 255, 255, 160));
         logoutBtn.setBorderPainted(false);

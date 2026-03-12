@@ -26,6 +26,7 @@ public class AdminService {
         }
         return false;
     }
+    //进行审核
     public boolean rejectStudent(String username) {
         List<User> list = userDao.findLits(u -> u.getUsername().equals(username));
         if (!list.isEmpty() && list.get(0) instanceof Student student) {

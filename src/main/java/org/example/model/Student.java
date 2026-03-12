@@ -5,7 +5,7 @@ public class Student extends User {
     private String school;
     private String major; // 专业
     private String grade;//年级
-    private String pohotPath;// 照片路径
+    private String address;// 照片路径
     // 展示到ui界面
     private String subject;//学科
     private String targetGrages;//可辅导年级
@@ -30,7 +30,7 @@ public class Student extends User {
         this.school = school;
         this.major = major;
         this.grade = grade;
-        this.pohotPath = pohotPath;
+        this.address = pohotPath;
     }
 
     public String getSchool() {
@@ -57,12 +57,12 @@ public class Student extends User {
         this.grade = grade;
     }
 
-    public String getPohotPath() {
-        return pohotPath;
+    public String getaddress() {
+        return address;
     }
 
-    public void setPohotPath(String pohotPath) {
-        this.pohotPath = pohotPath;
+    public void setaddress(String pohotPath) {
+        this.address = pohotPath;
     }
 
     public String getSubject() {
