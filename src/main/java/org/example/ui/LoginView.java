@@ -37,6 +37,7 @@ public class LoginView extends JFrame {
     private JTextField regSchoolField;
     private JTextField regMajorField;
     private JTextField regGradeField;
+    private JTextField regStudentID;
     // Parent 专用
     private JPanel parentExtraPanel;
     private JTextField regAddressField;
@@ -244,6 +245,9 @@ public class LoginView extends JFrame {
         regNameField = UITheme.roundedField("真实姓名");
         card.add(UITheme.formRow("姓  名", regNameField), gbc);
 
+        regStudentID = UITheme.roundedField("学号");
+        card.add(UITheme.formRow("学 号", regStudentID), gbc);
+
         regPhoneField = UITheme.roundedField("11位手机号");
         card.add(UITheme.formRow("手机号", regPhoneField), gbc);
 
@@ -373,13 +377,14 @@ public class LoginView extends JFrame {
             String school = regSchoolField.getText().trim();
             String major  = regMajorField.getText().trim();
             String grade  = regGradeField.getText().trim();
+            String studentid = regStudentID.getText().trim();
             if (Validator.isEmpty(school) || Validator.isEmpty(major) || Validator.isEmpty(grade)) {
                 UITheme.showError(this, "请填写学生信息（学校/专业/年级）！");
                 return;
             }
             Student s = new Student();
             s.setUsername(username); s.setPassword(password);
-            s.setName(name); s.setPhone(phone);
+            s.setName(name); s.setPhone(phone);s.setStudentid(studentid);
             s.setSchool(school); s.setMaior(major); s.setGrade(grade);
             s.setAccept(0); s.setVisible(false);
             newUser = s;

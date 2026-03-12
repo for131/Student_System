@@ -5,7 +5,8 @@ public class Student extends User {
     private String school;
     private String major; // 专业
     private String grade;//年级
-    private String address;// 照片路径
+    private String address;// 地址
+    private String Studentid;
     // 展示到ui界面
     private String subject;//学科
     private String targetGrages;//可辅导年级
@@ -23,14 +24,15 @@ public class Student extends User {
         this.Accept = 0;
         this.isVisible = false;
     }
-    public Student(String username, String password, String name, String phone, String school,String major,String grade,String pohotPath) {
+    public Student(String username, String password, String name, String phone, String school,String major,String grade,String address,String studentid) {
         super(username, password, name, phone, "Parent");
         this.Accept = 0;
         this.isVisible = false;
         this.school = school;
         this.major = major;
         this.grade = grade;
-        this.address = pohotPath;
+        this.address = address;
+        this.Studentid = studentid;
     }
 
     public String getSchool() {
@@ -128,6 +130,15 @@ public class Student extends User {
     public void setVisible(boolean visible) {
         isVisible = visible;
     }
+
+    public String getStudentid() {
+        return Studentid;
+    }
+
+    public void setStudentid(String studentid) {
+        Studentid = studentid;
+    }
+
     @Override
     public String toString() {
         return "Student{" +

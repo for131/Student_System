@@ -151,6 +151,8 @@ public class MainMenu {
         card.add(infoRow("学　校", student.getSchool()), gbc);
         card.add(infoRow("专　业", student.getMaior()), gbc);
         card.add(infoRow("年　级", student.getGrade()), gbc);
+        card.add(infoRow("学 号", student.getStudentid()), gbc);
+
         JLabel editTitle = new JLabel("── 教学信息（对家长可见）──");
         editTitle.setFont(UITheme.font(Font.BOLD, 12)); editTitle.setForeground(UITheme.TEXT_LIGHT);
         card.add(editTitle, gbc);
@@ -1236,14 +1238,14 @@ public class MainMenu {
                 .filter(u -> u instanceof Student).map(u -> (Student) u).toList();
         if (students.isEmpty()) { root.add(emptyHint("暂无学生账号"), BorderLayout.CENTER); return root; }
 
-        String[] cols = {"用户名", "姓名", "学校", "专业", "经验(年)", "审核状态", "通过", "拒绝"};
+        String[] cols = {"用户名", "姓名", "学校", "专业", "学号", "审核状态", "通过", "拒绝"};
         String[] statusText = {"待审核", "已通过", "已拒绝"};
         Object[][] data = new Object[students.size()][cols.length];
         for (int i = 0; i < students.size(); i++) {
             Student s = students.get(i);
             int acc = Math.min(s.getAccept(), 2);
             data[i] = new Object[]{s.getUsername(), s.getName(), s.getSchool(), s.getMaior(),
-                    s.getExperience(), statusText[acc], "通过", "拒绝"};
+                    s.getStudentid(), statusText[acc], "通过", "拒绝"};
         }
 
         DefaultTableModel model = new DefaultTableModel(data, cols) {
